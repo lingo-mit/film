@@ -1,8 +1,10 @@
 #!/bin/bash
 
-checkpoint_path="data/film.pt"
-log_path="data/film.log"
-python scripts/train_model.py \
+source $HOME/.profile
+
+checkpoint_path="data/film2.pt"
+log_path="data/film2.log"
+python3 -u scripts/train_model.py \
   --checkpoint_path $checkpoint_path \
   --model_type FiLM \
   --num_iterations 20000000 \

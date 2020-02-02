@@ -7,7 +7,9 @@
 import argparse, os, json
 import h5py
 import numpy as np
-from scipy.misc import imread, imresize
+#from scipy.misc import imread, imresize
+from skimage.transform import resize as imresize
+from imageio import imread
 from tqdm import tqdm
 
 import torch
@@ -63,8 +65,9 @@ def run_batch(cur_batch, model):
   image_batch = torch.FloatTensor(image_batch).cuda()
   image_batch = torch.autograd.Variable(image_batch, volatile=True)
 
-  feats = model(image_batch)
-  feats = feats.data.cpu().clone().numpy()
+  with torch.no_grad():
+      feats = model(image_batch)
+      feats = feats.data.cpu().clone().numpy()
 
   return feats
 
@@ -93,8 +96,13 @@ def main(args):
     i0 = 0
     cur_batch = []
     for i, (path, idx) in tqdm(enumerate(input_paths)):
-      img = imread(path, mode='RGB')
-      img = imresize(img, img_size, interp='bicubic')
+      img = imread(path, pilmode='RGB')
+      #print("image before")
+      #print(img)
+      img = imresize(img, img_size, order=3) * 255
+      #print("image after")
+      #print(img)
+      #assert False
       img = img.transpose(2, 0, 1)[None]
       cur_batch.append(img)
       if len(cur_batch) == args.batch_size:

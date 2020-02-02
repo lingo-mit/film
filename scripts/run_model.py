@@ -22,7 +22,7 @@ import torch.nn.functional as F
 import torchvision
 import numpy as np
 import h5py
-from scipy.misc import imread, imresize, imsave
+#from scipy.misc import imread, imresize, imsave
 
 import vr.utils as utils
 import vr.programs

@@ -102,6 +102,7 @@ parser.add_argument('--condition_method', default='bn-film', type=str,
 parser.add_argument('--condition_pattern', default='', type=str)  # List of 0/1's (len = # FiLMs)
 parser.add_argument('--use_gamma', default=1, type=int)
 parser.add_argument('--use_beta', default=1, type=int)
+parser.add_argument('--use_bert', default=0, type=int)
 parser.add_argument('--use_coords', default=1, type=int)  # 0: none, 1: low usage, 2: high usage
 parser.add_argument('--grad_clip', default=0, type=float)  # <= 0 for no grad clipping
 parser.add_argument('--debug_every', default=float('inf'), type=float)  # inf for no pdb
@@ -178,6 +179,7 @@ def main(args):
     'question_families': question_families,
     'max_samples': args.num_train_samples,
     'num_workers': args.loader_num_workers,
+    'use_bert': args.use_bert == 1,
   }
   val_loader_kwargs = {
     'question_h5': args.val_question_h5,
@@ -187,6 +189,7 @@ def main(args):
     'question_families': question_families,
     'max_samples': args.num_val_samples,
     'num_workers': args.loader_num_workers,
+    'use_bert': args.use_bert == 1,
   }
 
   with ClevrDataLoader(**train_loader_kwargs) as train_loader, \
@@ -344,7 +347,7 @@ def train_loop(args, train_loader, val_loader):
           ee_optimizer.step()
 
       if t % args.record_loss_every == 0:
-        running_loss += loss.data[0]
+        running_loss += loss.data.item()
         avg_loss = running_loss / args.record_loss_every
         print(t, avg_loss)
         stats['train_losses'].append(avg_loss)
@@ -353,14 +356,15 @@ def train_loop(args, train_loader, val_loader):
           stats['train_rewards'].append(reward)
         running_loss = 0.0
       else:
-        running_loss += loss.data[0]
+        running_loss += loss.data.item()
 
       if t % args.checkpoint_every == 0:
         num_checkpoints += 1
         print('Checking training accuracy ... ')
         start = time.time()
-        train_acc = check_accuracy(args, program_generator, execution_engine,
-                                   baseline_model, train_loader)
+        with torch.no_grad():
+          train_acc = check_accuracy(args, program_generator, execution_engine,
+                                     baseline_model, train_loader)
         if args.time == 1:
           train_pass_time = (time.time() - start)
           train_pass_total_time += train_pass_time
@@ -369,8 +373,9 @@ def train_loop(args, train_loader, val_loader):
         print('train accuracy is', train_acc)
         print('Checking validation accuracy ...')
         start = time.time()
-        val_acc = check_accuracy(args, program_generator, execution_engine,
-                                 baseline_model, val_loader)
+        with torch.no_grad():
+          val_acc = check_accuracy(args, program_generator, execution_engine,
+                                   baseline_model, val_loader)
         if args.time == 1:
           val_pass_time = (time.time() - start)
           val_pass_total_time += val_pass_time
@@ -458,6 +463,7 @@ def get_program_generator(args):
       kwargs['module_num_layers'] = args.module_num_layers
       kwargs['module_dim'] = args.module_dim
       kwargs['debug_every'] = args.debug_every
+      kwargs['use_bert'] = args.use_bert == 1
       pg = FiLMGen(**kwargs)
     else:
       pg = Seq2Seq(**kwargs)
@@ -498,6 +504,7 @@ def get_execution_engine(args):
       kwargs['module_kernel_size'] = args.module_kernel_size
       kwargs['use_gamma'] = args.use_gamma == 1
       kwargs['use_beta'] = args.use_beta == 1
+      kwargs['use_bert'] = args.use_bert == 1
       kwargs['use_coords'] = args.use_coords
       kwargs['debug_every'] = args.debug_every
       kwargs['print_verbose_every'] = args.print_verbose_every

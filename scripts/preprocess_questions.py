@@ -21,6 +21,8 @@ import numpy as np
 import vr.programs
 from vr.preprocess import tokenize, encode, build_vocab
 
+from transformers import BertTokenizer
+
 
 """
 Preprocessing script for CLEVR question files.
@@ -108,9 +110,12 @@ def main(args):
     with open(args.output_vocab_json, 'w') as f:
       json.dump(vocab, f)
 
+  bert_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+
   # Encode all questions and programs
   print('Encoding data')
   questions_encoded = []
+  questions_encoded_bert = []
   programs_encoded = []
   question_families = []
   orig_idxs = []
@@ -133,6 +138,7 @@ def main(args):
                          vocab['question_token_to_idx'],
                          allow_unk=args.encode_unk == 1)
     questions_encoded.append(question_encoded)
+    questions_encoded_bert.append(bert_tokenizer.encode(question.lower()))
 
     if 'program' in q:
       program = q['program']
@@ -150,6 +156,12 @@ def main(args):
     while len(qe) < max_question_length:
       qe.append(vocab['question_token_to_idx']['<NULL>'])
 
+  max_question_length_bert = max(len(x) for x in questions_encoded_bert)
+  pad_token_bert = 0
+  for qe in questions_encoded_bert:
+    while len(qe) < max_question_length_bert:
+      qe.append(pad_token_bert)
+
   if len(programs_encoded) > 0:
     max_program_length = max(len(x) for x in programs_encoded)
     for pe in programs_encoded:
@@ -159,8 +171,10 @@ def main(args):
   # Create h5 file
   print('Writing output')
   questions_encoded = np.asarray(questions_encoded, dtype=np.int32)
+  questions_encoded_bert = np.asarray(questions_encoded_bert, dtype=np.int32)
   programs_encoded = np.asarray(programs_encoded, dtype=np.int32)
   print(questions_encoded.shape)
+  print(questions_encoded_bert.shape)
   print(programs_encoded.shape)
 
   mapping = {}
@@ -175,6 +189,7 @@ def main(args):
 
   with h5py.File(args.output_h5_file, 'w') as f:
     f.create_dataset('questions', data=questions_encoded)
+    f.create_dataset('questions_bert', data=questions_encoded_bert)
     f.create_dataset('image_idxs', data=np.asarray(image_idxs))
     f.create_dataset('orig_idxs', data=np.asarray(orig_idxs))
 

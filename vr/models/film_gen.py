@@ -10,6 +10,8 @@ from torch.autograd import Variable
 from vr.embedding import expand_embedding_vocab
 from vr.models.layers import init_modules
 
+from transformers import BertModel
+
 
 class FiLMGen(nn.Module):
   def __init__(self,
@@ -34,6 +36,7 @@ class FiLMGen(nn.Module):
     module_dim=128,
     parameter_efficient=False,
     debug_every=float('inf'),
+    use_bert=False
   ):
     super(FiLMGen, self).__init__()
     self.encoder_type = encoder_type
@@ -66,6 +69,10 @@ class FiLMGen(nn.Module):
     if not parameter_efficient:  # parameter_efficient=False only used to load older trained models
       self.cond_feat_size = 4 * self.module_dim + 2 * self.num_modules
 
+    self.use_bert = use_bert
+    if use_bert:
+        self.bert = BertModel.from_pretrained("bert-base-uncased")
+        self.bert_proj = nn.Linear(768, wordvec_dim)
     self.encoder_embed = nn.Embedding(encoder_vocab_size, wordvec_dim)
     self.encoder_rnn = init_rnn(self.encoder_type, wordvec_dim, hidden_dim, rnn_num_layers,
                                 dropout=rnn_dropout, bidirectional=self.bidirectional)
@@ -113,7 +120,11 @@ class FiLMGen(nn.Module):
   def encoder(self, x):
     V_in, V_out, D, H, H_full, L, N, T_in, T_out = self.get_dims(x=x)
     x, idx = self.before_rnn(x)  # Tokenized word sequences (questions), end index
-    embed = self.encoder_embed(x)
+    if self.use_bert:
+        with torch.no_grad():
+            embed = self.bert_proj(self.bert(x)[0])
+    else:
+        embed = self.encoder_embed(x)
     h0 = Variable(torch.zeros(L, N, H).type_as(embed.data))
 
     if self.encoder_type == 'lstm':

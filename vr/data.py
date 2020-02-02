@@ -26,7 +26,7 @@ def _dataset_to_tensor(dset, mask=None):
 class ClevrDataset(Dataset):
   def __init__(self, question_h5, feature_h5, vocab, mode='prefix',
                image_h5=None, max_samples=None, question_families=None,
-               image_idx_start_from=None):
+               image_idx_start_from=None, use_bert=False):
     mode_choices = ['prefix', 'postfix']
     if mode not in mode_choices:
       raise ValueError('Invalid mode "%s"' % mode)
@@ -35,6 +35,7 @@ class ClevrDataset(Dataset):
     self.feature_h5 = feature_h5
     self.mode = mode
     self.max_samples = max_samples
+    self.use_bert = use_bert
 
     mask = None
     if question_families is not None:
@@ -57,6 +58,7 @@ class ClevrDataset(Dataset):
     if 'question_families' in question_h5:
       self.all_question_families = _dataset_to_tensor(question_h5['question_families'], mask)
     self.all_questions = _dataset_to_tensor(question_h5['questions'], mask)
+    self.all_questions_bert = _dataset_to_tensor(question_h5['questions_bert'], mask)
     self.all_image_idxs = _dataset_to_tensor(question_h5['image_idxs'], mask)
     self.all_programs = None
     if 'programs' in question_h5:
@@ -69,7 +71,10 @@ class ClevrDataset(Dataset):
     if self.all_question_families is not None:
       question_family = self.all_question_families[index]
     q_type = None if self.all_types is None else self.all_types[index]
-    question = self.all_questions[index]
+    if self.use_bert:
+        question = self.all_questions_bert[index]
+    else:
+        question = self.all_questions[index]
     image_idx = self.all_image_idxs[index]
     answer = None
     if self.all_answers is not None:
@@ -90,7 +95,7 @@ class ClevrDataset(Dataset):
     if program_seq is not None:
       program_json_seq = []
       for fn_idx in program_seq:
-        fn_str = self.vocab['program_idx_to_token'][fn_idx]
+        fn_str = self.vocab['program_idx_to_token'][fn_idx.item()]
         if fn_str == '<START>' or fn_str == '<END>': continue
         fn = vr.programs.str_to_function(fn_str)
         program_json_seq.append(fn)
@@ -131,6 +136,10 @@ class ClevrDataLoader(DataLoader):
 
     vocab = kwargs.pop('vocab')
     mode = kwargs.pop('mode', 'prefix')
+    if "use_bert" in kwargs:
+        use_bert = kwargs.pop("use_bert")
+    else:
+        use_bert = False
 
     question_families = kwargs.pop('question_families', None)
     max_samples = kwargs.pop('max_samples', None)
@@ -142,7 +151,8 @@ class ClevrDataLoader(DataLoader):
                                   image_h5=self.image_h5,
                                   max_samples=max_samples,
                                   question_families=question_families,
-                                  image_idx_start_from=image_idx_start_from)
+                                  image_idx_start_from=image_idx_start_from,
+                                  use_bert=use_bert)
     kwargs['collate_fn'] = clevr_collate
     super(ClevrDataLoader, self).__init__(self.dataset, **kwargs)
 

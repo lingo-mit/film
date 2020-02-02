@@ -51,6 +51,7 @@ class FiLMedNet(nn.Module):
                condition_pattern=[],
                use_gamma=True,
                use_beta=True,
+               use_bert=False,
                use_coords=1,
                debug_every=float('inf'),
                print_verbose_every=float('inf'),
